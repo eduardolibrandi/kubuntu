@@ -38,33 +38,36 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.
 echo "=== 6. Atualizando listas com os novos repositórios ==="
 sudo apt update
 
-echo "=== 7. Instalando VS Code, Sublime Text, Docker e Docker Compose ==="
+echo "=== 7. Instalando Suítes de Computação Forense ==="
+sudo apt install -y forensics-all forensics-extra forensics-full
+
+echo "=== 8. Instalando VS Code, Sublime Text, Docker e Docker Compose ==="
 sudo apt install -y code sublime-text docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
 
-echo "=== 8. Ativando e ajustando permissões do Docker ==="
+echo "=== 9. Ativando e ajustando permissões do Docker ==="
 sudo systemctl enable docker
 sudo systemctl start docker
 # Adiciona o usuário atual ao grupo docker para não precisar usar 'sudo docker'
 sudo usermod -aG docker $USER
 
-echo "=== 9. Instalando Node.js e NPM (Ambiente Full Stack) ==="
+echo "=== 10. Instalando Node.js e NPM (Ambiente Full Stack) ==="
 sudo apt install -y nodejs npm
 sudo npm install -g npm@latest
 
-echo "=== 10. Instalando PHP, Apache e Composer ==="
+echo "=== 11. Instalando PHP, Apache e Composer ==="
 sudo apt install -y php php-cli php-fpm php-json php-common php-mysql php-zip php-gd php-mbstring php-curl php-xml php-pear php-bcmath apache2 libapache2-mod-php
 curl -sS https://getcomposer.org/installer | php
 sudo mv composer.phar /usr/local/bin/composer
 
-echo "=== 11. Instalando Banco de Dados MariaDB ==="
+echo "=== 12. Instalando Banco de Dados MariaDB ==="
 sudo apt install -y mariadb-server mariadb-client
 sudo systemctl enable mariadb
 sudo systemctl start mariadb
 
-echo "=== 12. Instalando Python 3 e Java OpenJDK ==="
+echo "=== 13. Instalando Python 3 e Java OpenJDK ==="
 sudo apt install -y python3 python3-pip python3-venv default-jdk
 
 echo "=================================================="
 echo "      INSTALAÇÃO CONCLUÍDA COM SUCESSO!           "
 echo "=================================================="
-echo "AVISO: Reinicie o sistema ou encerre a sessão para que as permissões do Docker entrem em vigor."
+echo "AVISO: Reinicie o sistema ou encerre a sessão para que as permissões do Docker e o suporte dos utilitários entrem em vigor."
