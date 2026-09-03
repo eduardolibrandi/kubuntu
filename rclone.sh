@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Script de Sincronização Multinuvem (Corrigido)
+# Script de Sincronização Multinuvem
 # ==============================================================================
 
 GDRIVE_REMOTE="Gdrive:"
@@ -21,17 +21,13 @@ mkdir -p "/home/eduardo/Modelos"
 mkdir -p "/home/eduardo/Músicas"
 mkdir -p "/home/eduardo/Vídeos"
 
-# Se o arquivo de trava existir, remove se tiver mais de 1 hora (evita travamento eterno)
-if [ -f "$LOCK_FILE" ]; then
-    find "$LOCK_FILE" -mmin +60 -exec rm -f {} \;
-fi
+# ------------------------------------------------------------------------------
+# TRATAMENTO DE TRAVA (LOCK FILE)
+# ------------------------------------------------------------------------------
+# Remove preventivamente qualquer trava residual de execuções anteriores travadas
+rm -f "$LOCK_FILE"
 
-if [ -f "$LOCK_FILE" ]; then
-    echo "Uma sincronização já está em andamento. Caso não esteja, rode: rm -f /tmp/cloud_sync.lock"
-    exit 0
-fi
-
-# Cria o arquivo de trava e garante sua remoção ao encerrar o script
+# Cria a nova trava para a execução atual e garante sua remoção ao encerrar
 touch "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 
@@ -44,6 +40,7 @@ HORA_INICIO=$(date '+%H:%M:%S')
 echo "==================================================" | tee -a "$LOG_FILE"
 echo "Iniciando sincronização geral: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 
+# Notificação de início
 notify-send "Sincronização de Nuvens" "Sincronização iniciada às ${HORA_INICIO} h" \
     -i "$ICON_PATH" 2>/dev/null
 
