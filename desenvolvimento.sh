@@ -1,73 +1,80 @@
-#!/bin/bash
+cat << 'EOF' > ~/instalar_ambiente_dev.sh
+#!/usr/bin/env bash
 
-# Interrompe a execução em caso de erro crítico
 set -e
 
-echo "=== 1. Atualizando repositórios e pacotes do Kubuntu ==="
+echo "=== 1. ATUALIZANDO O SISTEMA ==="
 sudo apt update && sudo apt upgrade -y
 
-echo "=== 2. Instalando utilitários essenciais e chaves GPG ==="
-sudo apt install -y build-essential curl wget git unzip software-properties-common apt-transport-https ca-certificates gpg
+echo "=== 2. INSTALANDO DEPENDÊNCIAS ESSENCIAIS E SUPORTE A FLATPAK/SNAP ==="
+sudo apt install -y \
+    curl \
+    wget \
+    git \
+    build-essential \
+    software-properties-common \
+    apt-transport-https \
+    ca-certificates \
+    gnupg \
+    lsb-release \
+    flatpak \
+    snapd
 
-# --------------------------------------------------
-# CONFIGURAÇÃO DOS REPOSITÓRIOS OFICIAIS (.DEB)
-# --------------------------------------------------
+# Adiciona repositório Flathub
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
-echo "=== 3. Configurando Repositório do VS Code ==="
-wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
-sudo install -D -o root -g root -m 644 microsoft.gpg /etc/apt/keyrings/microsoft.gpg
-echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" | sudo tee /etc/apt/sources.list.d/vscode.list > /dev/null
-rm microsoft.gpg
+echo "=== 3. INSTALANDO INTERFACE KDE PLASMA COMPLETA ==="
+sudo apt install -y kde-full
 
-echo "=== 4. Configurando Repositório do Sublime Text ==="
-wget -qO- https://download.sublimetext.com/sublimehq-pub.gpg | gpg --dearmor > sublime.gpg
-sudo install -D -o root -g root -m 644 sublime.gpg /etc/apt/keyrings/sublime.gpg
-echo "deb [signed-by=/etc/apt/keyrings/sublime.gpg] https://download.sublimetext.com/ apt/stable/" | sudo tee /etc/apt/sources.list.d/sublime-text.list > /dev/null
-rm sublime.gpg
+echo "=== 4. INSTALANDO LINGUAGENS E FERRAMENTAS DE DESENVOLVIMENTO ==="
+# Python 3, pip e venv (Ciência da Computação / Dados / Backend)
+sudo apt install -y python3 python3-pip python3-venv python3-dev
 
-echo "=== 5. Configurando Repositório Oficial do Docker ==="
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$UBUNTU_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+# Node.js (LTS) e npm (Full Stack / Frontend / Backend)
+curl -fsSL https://deb.nodesource.com/setup_lts.x | sudo -E bash -
+sudo apt install -y nodejs
 
-# --------------------------------------------------
-# INSTALAÇÃO DOS SOFTWARES
-# --------------------------------------------------
+echo "=== 5. INSTALANDO DOCKER ENGINE ==="
+sudo mkdir -p /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg --yes
+echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-echo "=== 6. Atualizando listas com os novos repositórios ==="
 sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
 
-echo "=== 7. Instalando Suítes de Computação Forense ==="
-sudo apt install -y forensics-all forensics-extra forensics-full
-
-echo "=== 8. Instalando VS Code, Sublime Text, Docker e Docker Compose ==="
-sudo apt install -y code sublime-text docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-
-echo "=== 9. Ativando e ajustando permissões do Docker ==="
-sudo systemctl enable docker
-sudo systemctl start docker
-# Adiciona o usuário atual ao grupo docker para não precisar usar 'sudo docker'
+# Adiciona o usuário ao grupo docker para rodar sem 'sudo'
 sudo usermod -aG docker $USER
 
-echo "=== 10. Instalando Node.js e NPM (Ambiente Full Stack) ==="
-sudo apt install -y nodejs npm
-sudo npm install -g npm@latest
+echo "=== 6. INSTALANDO EDITORES E BANCOS DE DADOS (IDE / TOOLS) ==="
+# Visual Studio Code
+wget -qO- https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > /tmp/packages.microsoft.gpg
+sudo install -D -o root -g root -m 644 /tmp/packages.microsoft.gpg /etc/apt/keyrings/packages.microsoft.gpg
+sudo sh -c 'echo "deb [arch=amd64,arm64,armhf signed-by=/etc/apt/keyrings/packages.microsoft.gpg] https://packages.microsoft.com/repos/code stable main" > /etc/apt/sources.list.d/vscode.list'
+rm -f /tmp/packages.microsoft.gpg
+sudo apt update
+sudo apt install -y code
 
-echo "=== 11. Instalando PHP, Apache e Composer ==="
-sudo apt install -y php php-cli php-fpm php-json php-common php-mysql php-zip php-gd php-mbstring php-curl php-xml php-pear php-bcmath apache2 libapache2-mod-php
-curl -sS https://getcomposer.org/installer | php
-sudo mv composer.phar /usr/local/bin/composer
+# DBeaver CE (Gerenciador Universal de Bancos de Dados via Flatpak)
+flatpak install flathub org.dbeaver.DBeaverCommunity -y
 
-echo "=== 12. Instalando Banco de Dados MariaDB ==="
-sudo apt install -y mariadb-server mariadb-client
-sudo systemctl enable mariadb
-sudo systemctl start mariadb
+# Postman (Testes de APIs Rest/GraphQL via Snap)
+sudo snap install postman
 
-echo "=== 13. Instalando Python 3 e Java OpenJDK ==="
-sudo apt install -y python3 python3-pip python3-venv default-jdk
+echo "=== 7. APLICANDO LIMPEZA E CONFIGURAÇÕES FINAIS ==="
+sudo systemctl enable sddm
+sudo systemctl enable docker
+sudo apt autoremove -y
+sudo apt clean
 
-echo "=================================================="
-echo "      INSTALAÇÃO CONCLUÍDA COM SUCESSO!           "
-echo "=================================================="
-echo "AVISO: Reinicie o sistema ou encerre a sessão para que as permissões do Docker e o suporte dos utilitários entrem em vigor."
+echo "================================================================="
+echo " Instalação concluída com sucesso!"
+echo " RECOMENDAÇÃO: Reinicie o sistema para carregar o KDE Plasma e "
+echo " aplicar as permissões do grupo Docker no seu usuário."
+echo "================================================================="
+EOF
+
+# Concede permissão de execução e inicia o script
+chmod +x ~/instalar_ambiente_dev.sh
+./instalar_ambiente_dev.sh
