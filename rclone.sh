@@ -1,8 +1,33 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Script de Sincronização Multinuvem
+# Script de Sincronização Multinuvem (OneDrive -> Local | Google Drive -> Local)
 # ==============================================================================
 
+set -euo pipefail
+
+# ------------------------------------------------------------------------------
+# TRAVA DE HORÁRIO DE INÍCIO DA OPERAÇÃO (10/09/2026 00:00:00)
+# ------------------------------------------------------------------------------
+DATA_INICIO_PERMITIDA="2026-09-10 00:00:00"
+TIMESTAMP_LIBERACAO=$(date -d "$DATA_INICIO_PERMITIDA" +%s)
+TIMESTAMP_ATUAL=$(date +%s)
+
+if [ "$TIMESTAMP_ATUAL" -lt "$TIMESTAMP_LIBERACAO" ]; then
+    echo "=================================================="
+    echo "Aviso: A Sincronização agendada ainda não atingiu o horário liberado."
+    echo "Liberado a partir de: $DATA_INICIO_PERMITIDA"
+    echo "Data/Hora Atual:      $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "=================================================="
+    
+    # Notificação gráfica e encerramento seguro
+    notify-send "Sincronização de Nuvens" "Aguardando data de liberação ($DATA_INICIO_PERMITIDA)" \
+        -i dialog-information 2>/dev/null || true
+    exit 0
+fi
+
+# ------------------------------------------------------------------------------
+# CONFIGURAÇÕES E VARIÁVEIS DE AMBIENTE
+# ------------------------------------------------------------------------------
 GDRIVE_REMOTE="Gdrive:"
 ODRIVE_REMOTE="Odrive:"
 
@@ -22,16 +47,13 @@ mkdir -p "/home/eduardo/Músicas"
 mkdir -p "/home/eduardo/Vídeos"
 
 # ------------------------------------------------------------------------------
-# TRATAMENTO DE TRAVA (LOCK FILE)
+# TRATAMENTO DE TRAVA (LOCK FILE DE EXECUÇÃO)
 # ------------------------------------------------------------------------------
-# Remove preventivamente qualquer trava residual de execuções anteriores travadas
 rm -f "$LOCK_FILE"
-
-# Cria a nova trava para a execução atual e garante sua remoção ao encerrar
 touch "$LOCK_FILE"
 trap 'rm -f "$LOCK_FILE"' EXIT
 
-# Rotação de Log simples (Se o arquivo tiver mais de 24 horas / 1 dia, é limpo)
+# Rotação de Log simples (se tiver mais de 24 horas, limpa)
 if [ -f "$LOG_FILE" ]; then
     find "$LOG_DIR" -name "rclone.txt" -mtime +1 -exec rm -f {} \;
 fi
@@ -42,36 +64,38 @@ echo "Iniciando sincronização geral: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$
 
 # Notificação de início
 notify-send "Sincronização de Nuvens" "Sincronização iniciada às ${HORA_INICIO} h" \
-    -i "$ICON_PATH" 2>/dev/null
+    -i "$ICON_PATH" 2>/dev/null || true
 
 STATUS_ODRIVE=0
+STATUS_GDRIVE_DOWNLOAD=0
 
 # ------------------------------------------------------------------------------
 # ETAPA 1: DOWNLOAD DO ONEDRIVE (Odrive: -> Pastas Locais)
 # ------------------------------------------------------------------------------
-echo -e "\n=== [FASE 1/3] Sincronizando OneDrive para a máquina local ===" | tee -a "$LOG_FILE"
+echo -e "\n=== [FASE 1/2] Sincronizando OneDrive para a máquina local ===" | tee -a "$LOG_FILE"
 
 sync_odrive_folder() {
     local src_folder="$1"
     local dest_folder="$2"
-    echo "-> Baixando: $src_folder..."
+    echo "-> Baixando do OneDrive: $src_folder..."
     
     rclone copy "$ODRIVE_REMOTE/$src_folder" "$dest_folder/$src_folder" \
         -P \
         --update \
         --transfers 4 \
         --checkers 8 \
-        --stats 1s
+        --stats 1s \
+        2>&1 | tee -a "$LOG_FILE"
         
-    return $?
+    return ${PIPESTATUS[0]}
 }
 
 # Documentos -> Drª Zuely
 echo "-> Baixando: Documentos (Drª Zuely)..."
 rclone copy "$ODRIVE_REMOTE/Documentos" "$GDRIVE_LOCAL/Drª Zuely/Documentos" \
-    -P --update --transfers 4 --checkers 8 --stats 1s || STATUS_ODRIVE=1
+    -P --update --transfers 4 --checkers 8 --stats 1s 2>&1 | tee -a "$LOG_FILE" || STATUS_ODRIVE=1
 
-# Pastas para /home/eduardo/Google Drive
+# Pastas do OneDrive para /home/eduardo/Google Drive
 sync_odrive_folder "Anexos" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
 sync_odrive_folder "Banco de Dados" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
 sync_odrive_folder "Contatos" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
@@ -81,46 +105,27 @@ sync_odrive_folder "Livros" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
 sync_odrive_folder "Pdf" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
 sync_odrive_folder "Scripts" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
 
-# Pastas para a HOME
+# Pastas do OneDrive para a HOME
 sync_odrive_folder "Imagens" "/home/eduardo" || STATUS_ODRIVE=1
 sync_odrive_folder "Modelos" "/home/eduardo" || STATUS_ODRIVE=1
 sync_odrive_folder "Músicas" "/home/eduardo" || STATUS_ODRIVE=1
 sync_odrive_folder "Vídeos" "/home/eduardo" || STATUS_ODRIVE=1
 
 # ------------------------------------------------------------------------------
-# ETAPA 2: UPLOAD PARA GOOGLE DRIVE (Local -> Gdrive:)
+# ETAPA 2: DOWNLOAD DO GOOGLE DRIVE (Gdrive: -> /home/eduardo/Google Drive)
 # ------------------------------------------------------------------------------
 if [ $STATUS_ODRIVE -eq 0 ]; then
-    echo -e "\n=== [FASE 2/3] Enviando arquivos locais para o Google Drive ===" | tee -a "$LOG_FILE"
-
-    rclone copy "$GDRIVE_LOCAL" "$GDRIVE_REMOTE" \
-        -P \
-        --update \
-        --transfers 4 \
-        --checkers 8 \
-        --stats 1s
-
-    STATUS_GDRIVE_UPLOAD=$?
-else
-    echo "Falha no download do OneDrive. Ignorando etapas do Google Drive." | tee -a "$LOG_FILE"
-    STATUS_GDRIVE_UPLOAD=1
-fi
-
-# ------------------------------------------------------------------------------
-# ETAPA 3: DOWNLOAD DO GOOGLE DRIVE (Gdrive: -> Local)
-# ------------------------------------------------------------------------------
-if [ $STATUS_GDRIVE_UPLOAD -eq 0 ]; then
-    echo -e "\n=== [FASE 3/3] Baixando novidades do Google Drive ===" | tee -a "$LOG_FILE"
+    echo -e "\n=== [FASE 2/2] Baixando arquivos do Google Drive para a pasta local ===" | tee -a "$LOG_FILE"
 
     rclone copy "$GDRIVE_REMOTE" "$GDRIVE_LOCAL" \
         -P \
         --update \
         --transfers 4 \
         --checkers 8 \
-        --stats 1s
-
-    STATUS_GDRIVE_DOWNLOAD=$?
+        --stats 1s \
+        2>&1 | tee -a "$LOG_FILE" || STATUS_GDRIVE_DOWNLOAD=1
 else
+    echo "Falha no download do OneDrive. Ignorando download do Google Drive." | tee -a "$LOG_FILE"
     STATUS_GDRIVE_DOWNLOAD=1
 fi
 
@@ -129,12 +134,12 @@ fi
 # ------------------------------------------------------------------------------
 HORA_FIM=$(date '+%H:%M:%S')
 
-if [ $STATUS_ODRIVE -eq 0 ] && [ $STATUS_GDRIVE_UPLOAD -eq 0 ] && [ $STATUS_GDRIVE_DOWNLOAD -eq 0 ]; then
+if [ $STATUS_ODRIVE -eq 0 ] && [ $STATUS_GDRIVE_DOWNLOAD -eq 0 ]; then
     echo -e "\nSincronização concluída com sucesso: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
-    notify-send "Sincronização de Nuvens" "Sincronização finalizada às ${HORA_FIM} h" \
-        -i "$ICON_PATH" 2>/dev/null
+    notify-send "Sincronização de Nuvens" "Sincronização finalizada com sucesso às ${HORA_FIM} h" \
+        -i "$ICON_PATH" 2>/dev/null || true
 else
-    echo -e "\nErro durante a sincronização (Odrive: $STATUS_ODRIVE, Gdrive Up: $STATUS_GDRIVE_UPLOAD, Gdrive Down: $STATUS_GDRIVE_DOWNLOAD): $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
+    echo -e "\nErro durante a sincronização (OneDrive: $STATUS_ODRIVE, Gdrive Down: $STATUS_GDRIVE_DOWNLOAD): $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
     notify-send "Sincronização de Nuvens" "Falha na sincronização das nuvens." \
-        -i dialog-error 2>/dev/null
+        -i dialog-error 2>/dev/null || true
 fi
