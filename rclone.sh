@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script de Sincronização Multinuvem (OneDrive -> Local | Google Drive -> Local)
-# Usando Rclone Sync (Espelhamento Exato com Proteção de Pastas)
+# Usando Rclone Sync com Mapeamento Específico de Pastas
 # ==============================================================================
 
 set -euo pipefail
@@ -39,9 +39,8 @@ ICON_PATH="/home/eduardo/.local/share/icons/ExposeAir/apps/scalable/unity-scope-
 
 # Garantir diretórios locais
 mkdir -p "$LOG_DIR"
-mkdir -p "$GDRIVE_LOCAL"
-mkdir -p "$GDRIVE_LOCAL/Drª. Zuely"
-mkdir -p "$GDRIVE_LOCAL/Drª. Michele"
+mkdir -p "$GDRIVE_LOCAL/Drª. Zuely/Documentos"
+mkdir -p "/home/eduardo/Fax"
 mkdir -p "/home/eduardo/Imagens"
 mkdir -p "/home/eduardo/Modelos"
 mkdir -p "/home/eduardo/Músicas"
@@ -61,26 +60,25 @@ fi
 
 HORA_INICIO=$(date '+%H:%M:%S')
 echo "==================================================" | tee -a "$LOG_FILE"
-echo "Iniciando sincronização geral (SYNC): $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
-
-# Notificação de início
-notify-send "Sincronização de Nuvens" "Sincronização iniciada às ${HORA_INICIO} h" \
-    -i "$ICON_PATH" 2>/dev/null || true
+echo "Iniciando sincronização geral: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 
 STATUS_ODRIVE=0
-STATUS_GDRIVE_DOWNLOAD=0
+STATUS_GDRIVE=0
 
 # ------------------------------------------------------------------------------
-# ETAPA 1: DOWNLOAD DO ONEDRIVE (Odrive: -> Pastas Locais via SYNC)
+# ETAPA 1: SINCRONIZAÇÃO DO ONEDRIVE (Odrive: -> Pastas Locais Especificadas)
 # ------------------------------------------------------------------------------
-echo -e "\n=== [FASE 1/2] Sincronizando (SYNC) OneDrive para a máquina local ===" | tee -a "$LOG_FILE"
+echo -e "\n=== [FASE 1/2] Sincronizando OneDrive para as pastas locais ===" | tee -a "$LOG_FILE"
+notify-send "Sincronização OneDrive" "Iniciando sincronização do OneDrive às ${HORA_INICIO} h" \
+    -i "$ICON_PATH" 2>/dev/null || true
 
-sync_odrive_folder() {
-    local src_folder="$1"
-    local dest_folder="$2"
-    echo "-> Espelhando do OneDrive: $src_folder..."
+# Função genérica para mapeamentos diretos
+sync_odrive_item() {
+    local src="$1"
+    local dest="$2"
+    echo "-> Sincronizando OneDrive: $src -> $dest..."
     
-    rclone sync "$ODRIVE_REMOTE/$src_folder" "$dest_folder/$src_folder" \
+    rclone sync "$ODRIVE_REMOTE/$src" "$dest" \
         -P \
         --update \
         --transfers 4 \
@@ -91,73 +89,60 @@ sync_odrive_folder() {
     return ${PIPESTATUS[0]}
 }
 
-# Documentos específicos -> Pastas locais ajustadas
-echo "-> Espelhando: Documentos (Drª. Zuely)..."
-rclone sync "$ODRIVE_REMOTE/Documentos" "$GDRIVE_LOCAL/Drª. Zuely/Documentos" \
-    -P --update --transfers 4 --checkers 8 --stats 1s 2>&1 | tee -a "$LOG_FILE" || STATUS_ODRIVE=1
+# Mapeamentos do OneDrive conforme especificação
+sync_odrive_item "Documentos" "$GDRIVE_LOCAL/Drª. Zuely/Documentos" || STATUS_ODRIVE=1
+sync_odrive_item "Fax" "/home/eduardo/Fax" || STATUS_ODRIVE=1
+sync_odrive_item "Imagens" "/home/eduardo/Imagens" || STATUS_ODRIVE=1
+sync_odrive_item "Modelos" "/home/eduardo/Modelos" || STATUS_ODRIVE=1
+sync_odrive_item "Músicas" "/home/eduardo/Músicas" || STATUS_ODRIVE=1
+sync_odrive_item "Vídeos" "/home/eduardo/Vídeos" || STATUS_ODRIVE=1
 
-# Caso existam documentos específicos do OneDrive para a Drª. Michele:
-# echo "-> Espelhando: Documentos (Drª. Michele)..."
-# rclone sync "$ODRIVE_REMOTE/Documentos_Michele" "$GDRIVE_LOCAL/Drª. Michele/Documentos" \
-#     -P --update --transfers 4 --checkers 8 --stats 1s 2>&1 | tee -a "$LOG_FILE" || STATUS_ODRIVE=1
-
-# Pastas do OneDrive para /home/eduardo/Google Drive
-sync_odrive_folder "Anexos" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-sync_odrive_folder "Banco de Dados" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-sync_odrive_folder "Contatos" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-sync_odrive_folder "E-mails" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-sync_odrive_folder "Fax" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-sync_odrive_folder "Livros" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-sync_odrive_folder "Pdf" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-sync_odrive_folder "Scripts" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
-
-# Pastas do OneDrive para a HOME
-sync_odrive_folder "Imagens" "/home/eduardo" || STATUS_ODRIVE=1
-sync_odrive_folder "Modelos" "/home/eduardo" || STATUS_ODRIVE=1
-sync_odrive_folder "Músicas" "/home/eduardo" || STATUS_ODRIVE=1
-sync_odrive_folder "Vídeos" "/home/eduardo" || STATUS_ODRIVE=1
+HORA_FIM_ODRIVE=$(date '+%H:%M:%S')
+if [ $STATUS_ODRIVE -eq 0 ]; then
+    notify-send "Sincronização OneDrive" "OneDrive concluído com sucesso às ${HORA_FIM_ODRIVE} h" \
+        -i "$ICON_PATH" 2>/dev/null || true
+else
+    notify-send "Sincronização OneDrive" "Falha durante a sincronização do OneDrive." \
+        -i dialog-error 2>/dev/null || true
+fi
 
 # ------------------------------------------------------------------------------
-# ETAPA 2: DOWNLOAD DO GOOGLE DRIVE (Gdrive: -> /home/eduardo/Google Drive via SYNC)
+# ETAPA 2: SINCRONIZAÇÃO DO GOOGLE DRIVE (Gdrive: -> /home/eduardo/Google Drive)
 # ------------------------------------------------------------------------------
 if [ $STATUS_ODRIVE -eq 0 ]; then
-    echo -e "\n=== [FASE 2/2] Sincronizando (SYNC) Google Drive para a pasta local ===" | tee -a "$LOG_FILE"
+    echo -e "\n=== [FASE 2/2] Sincronizando Google Drive para /home/eduardo/Google Drive ===" | tee -a "$LOG_FILE"
+    HORA_INICIO_GDRIVE=$(date '+%H:%M:%S')
+    notify-send "Sincronização Google Drive" "Iniciando sincronização do Google Drive às ${HORA_INICIO_GDRIVE} h" \
+        -i "$ICON_PATH" 2>/dev/null || true
 
-    # ATENÇÃO: As regras --exclude protegem as pastas locais da Drª. Zuely e Drª. Michele 
-    # (e demais vindas do OneDrive) de serem apagadas pelo sync do Google Drive Raiz.
+    # A trava --exclude protege a subpasta Documentos que veio do OneDrive
     rclone sync "$GDRIVE_REMOTE" "$GDRIVE_LOCAL" \
-        --exclude "Drª. Zuely/**" \
-        --exclude "Drª. Michele/**" \
-        --exclude "Anexos/**" \
-        --exclude "Banco de Dados/**" \
-        --exclude "Contatos/**" \
-        --exclude "E-mails/**" \
-        --exclude "Fax/**" \
-        --exclude "Livros/**" \
-        --exclude "Pdf/**" \
-        --exclude "Scripts/**" \
+        --exclude "Drª. Zuely/Documentos/**" \
         -P \
         --update \
         --transfers 4 \
         --checkers 8 \
         --stats 1s \
-        2>&1 | tee -a "$LOG_FILE" || STATUS_GDRIVE_DOWNLOAD=1
+        2>&1 | tee -a "$LOG_FILE" || STATUS_GDRIVE=1
+
+    HORA_FIM_GDRIVE=$(date '+%H:%M:%S')
+    if [ $STATUS_GDRIVE -eq 0 ]; then
+        notify-send "Sincronização Google Drive" "Google Drive concluído com sucesso às ${HORA_FIM_GDRIVE} h" \
+            -i "$ICON_PATH" 2>/dev/null || true
+    else
+        notify-send "Sincronização Google Drive" "Falha durante a sincronização do Google Drive." \
+            -i dialog-error 2>/dev/null || true
+    fi
 else
-    echo "Falha no download do OneDrive. Ignorando sincronização do Google Drive." | tee -a "$LOG_FILE"
-    STATUS_GDRIVE_DOWNLOAD=1
+    echo "Falha na etapa do OneDrive. Sincronização do Google Drive abortada." | tee -a "$LOG_FILE"
+    STATUS_GDRIVE=1
 fi
 
 # ------------------------------------------------------------------------------
-# NOTIFICAÇÃO FINAL
+# REGISTRO EM LOG
 # ------------------------------------------------------------------------------
-HORA_FIM=$(date '+%H:%M:%S')
-
-if [ $STATUS_ODRIVE -eq 0 ] && [ $STATUS_GDRIVE_DOWNLOAD -eq 0 ]; then
-    echo -e "\nSincronização concluída com sucesso: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
-    notify-send "Sincronização de Nuvens" "Sincronização finalizada com sucesso às ${HORA_FIM} h" \
-        -i "$ICON_PATH" 2>/dev/null || true
+if [ $STATUS_ODRIVE -eq 0 ] && [ $STATUS_GDRIVE -eq 0 ]; then
+    echo -e "\nSincronização geral concluída com sucesso: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 else
-    echo -e "\nErro durante a sincronização (OneDrive: $STATUS_ODRIVE, Gdrive Down: $STATUS_GDRIVE_DOWNLOAD): $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
-    notify-send "Sincronização de Nuvens" "Falha na sincronização das nuvens." \
-        -i dialog-error 2>/dev/null || true
+    echo -e "\nErro na sincronização (OneDrive: $STATUS_ODRIVE, Gdrive: $STATUS_GDRIVE): $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 fi
