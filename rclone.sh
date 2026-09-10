@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # Script de Sincronização Multinuvem (OneDrive -> Local | Google Drive -> Local)
+# Usando Rclone Sync (Espelhamento Exato com Proteção de Pastas)
 # ==============================================================================
 
 set -euo pipefail
@@ -19,7 +20,6 @@ if [ "$TIMESTAMP_ATUAL" -lt "$TIMESTAMP_LIBERACAO" ]; then
     echo "Data/Hora Atual:      $(date '+%Y-%m-%d %H:%M:%S')"
     echo "=================================================="
     
-    # Notificação gráfica e encerramento seguro
     notify-send "Sincronização de Nuvens" "Aguardando data de liberação ($DATA_INICIO_PERMITIDA)" \
         -i dialog-information 2>/dev/null || true
     exit 0
@@ -40,7 +40,8 @@ ICON_PATH="/home/eduardo/.local/share/icons/ExposeAir/apps/scalable/unity-scope-
 # Garantir diretórios locais
 mkdir -p "$LOG_DIR"
 mkdir -p "$GDRIVE_LOCAL"
-mkdir -p "$GDRIVE_LOCAL/Drª Zuely"
+mkdir -p "$GDRIVE_LOCAL/Drª. Zuely"
+mkdir -p "$GDRIVE_LOCAL/Drª. Michele"
 mkdir -p "/home/eduardo/Imagens"
 mkdir -p "/home/eduardo/Modelos"
 mkdir -p "/home/eduardo/Músicas"
@@ -60,7 +61,7 @@ fi
 
 HORA_INICIO=$(date '+%H:%M:%S')
 echo "==================================================" | tee -a "$LOG_FILE"
-echo "Iniciando sincronização geral: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
+echo "Iniciando sincronização geral (SYNC): $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 
 # Notificação de início
 notify-send "Sincronização de Nuvens" "Sincronização iniciada às ${HORA_INICIO} h" \
@@ -70,16 +71,16 @@ STATUS_ODRIVE=0
 STATUS_GDRIVE_DOWNLOAD=0
 
 # ------------------------------------------------------------------------------
-# ETAPA 1: DOWNLOAD DO ONEDRIVE (Odrive: -> Pastas Locais)
+# ETAPA 1: DOWNLOAD DO ONEDRIVE (Odrive: -> Pastas Locais via SYNC)
 # ------------------------------------------------------------------------------
-echo -e "\n=== [FASE 1/2] Sincronizando OneDrive para a máquina local ===" | tee -a "$LOG_FILE"
+echo -e "\n=== [FASE 1/2] Sincronizando (SYNC) OneDrive para a máquina local ===" | tee -a "$LOG_FILE"
 
 sync_odrive_folder() {
     local src_folder="$1"
     local dest_folder="$2"
-    echo "-> Baixando do OneDrive: $src_folder..."
+    echo "-> Espelhando do OneDrive: $src_folder..."
     
-    rclone copy "$ODRIVE_REMOTE/$src_folder" "$dest_folder/$src_folder" \
+    rclone sync "$ODRIVE_REMOTE/$src_folder" "$dest_folder/$src_folder" \
         -P \
         --update \
         --transfers 4 \
@@ -90,10 +91,15 @@ sync_odrive_folder() {
     return ${PIPESTATUS[0]}
 }
 
-# Documentos -> Drª Zuely
-echo "-> Baixando: Documentos (Drª Zuely)..."
-rclone copy "$ODRIVE_REMOTE/Documentos" "$GDRIVE_LOCAL/Drª Zuely/Documentos" \
+# Documentos específicos -> Pastas locais ajustadas
+echo "-> Espelhando: Documentos (Drª. Zuely)..."
+rclone sync "$ODRIVE_REMOTE/Documentos" "$GDRIVE_LOCAL/Drª. Zuely/Documentos" \
     -P --update --transfers 4 --checkers 8 --stats 1s 2>&1 | tee -a "$LOG_FILE" || STATUS_ODRIVE=1
+
+# Caso existam documentos específicos do OneDrive para a Drª. Michele:
+# echo "-> Espelhando: Documentos (Drª. Michele)..."
+# rclone sync "$ODRIVE_REMOTE/Documentos_Michele" "$GDRIVE_LOCAL/Drª. Michele/Documentos" \
+#     -P --update --transfers 4 --checkers 8 --stats 1s 2>&1 | tee -a "$LOG_FILE" || STATUS_ODRIVE=1
 
 # Pastas do OneDrive para /home/eduardo/Google Drive
 sync_odrive_folder "Anexos" "$GDRIVE_LOCAL" || STATUS_ODRIVE=1
@@ -112,12 +118,24 @@ sync_odrive_folder "Músicas" "/home/eduardo" || STATUS_ODRIVE=1
 sync_odrive_folder "Vídeos" "/home/eduardo" || STATUS_ODRIVE=1
 
 # ------------------------------------------------------------------------------
-# ETAPA 2: DOWNLOAD DO GOOGLE DRIVE (Gdrive: -> /home/eduardo/Google Drive)
+# ETAPA 2: DOWNLOAD DO GOOGLE DRIVE (Gdrive: -> /home/eduardo/Google Drive via SYNC)
 # ------------------------------------------------------------------------------
 if [ $STATUS_ODRIVE -eq 0 ]; then
-    echo -e "\n=== [FASE 2/2] Baixando arquivos do Google Drive para a pasta local ===" | tee -a "$LOG_FILE"
+    echo -e "\n=== [FASE 2/2] Sincronizando (SYNC) Google Drive para a pasta local ===" | tee -a "$LOG_FILE"
 
-    rclone copy "$GDRIVE_REMOTE" "$GDRIVE_LOCAL" \
+    # ATENÇÃO: As regras --exclude protegem as pastas locais da Drª. Zuely e Drª. Michele 
+    # (e demais vindas do OneDrive) de serem apagadas pelo sync do Google Drive Raiz.
+    rclone sync "$GDRIVE_REMOTE" "$GDRIVE_LOCAL" \
+        --exclude "Drª. Zuely/**" \
+        --exclude "Drª. Michele/**" \
+        --exclude "Anexos/**" \
+        --exclude "Banco de Dados/**" \
+        --exclude "Contatos/**" \
+        --exclude "E-mails/**" \
+        --exclude "Fax/**" \
+        --exclude "Livros/**" \
+        --exclude "Pdf/**" \
+        --exclude "Scripts/**" \
         -P \
         --update \
         --transfers 4 \
@@ -125,7 +143,7 @@ if [ $STATUS_ODRIVE -eq 0 ]; then
         --stats 1s \
         2>&1 | tee -a "$LOG_FILE" || STATUS_GDRIVE_DOWNLOAD=1
 else
-    echo "Falha no download do OneDrive. Ignorando download do Google Drive." | tee -a "$LOG_FILE"
+    echo "Falha no download do OneDrive. Ignorando sincronização do Google Drive." | tee -a "$LOG_FILE"
     STATUS_GDRIVE_DOWNLOAD=1
 fi
 
