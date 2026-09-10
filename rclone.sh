@@ -1,4 +1,28 @@
 #!/usr/bin/env bash
+
+# ==============================================================================
+# Mapa do sincronismo - Duas contas, sendo Odrive e Gdrive
+# ==============================================================================
+
+# -1 2025-03-23 09:52:43      1085 Documentos --------------> /home/eduardo/'Google Drive'/'Drª. Zuely'
+# -1 2025-04-13 17:22:10         2 Fax        --------------> /home/eduardo/Fax
+# -1 2025-03-07 13:04:05        44 Imagens    --------------> /home/eduardo/Imagens
+# -1 2025-04-13 17:22:10         5 Modelos    --------------> /home/eduardo/Modelos
+# -1 2025-04-20 20:56:52        61 Músicas    --------------> /home/eduardo/Músicas
+# -1 2025-03-07 13:05:03         6 Vídeos     --------------> /home/eduardo/Vídeos
+          
+# -1 2026-09-07 17:52:43        -1 Banco de Dados ----------|
+# -1 2026-09-07 17:57:14        -1 Dr. Eduardo -------------|
+# -1 2026-09-07 20:30:33        -1 Dr. Leandro -------------|
+# -1 2026-08-17 12:54:28        -1 Dr. Luis Pedro ----------|
+# -1 2026-09-09 12:45:37        -1 Drª. Michele ------------|
+# -1 2026-09-09 12:45:28        -1 Drª. Zuely --------------|---> /home/eduardo/'Google Drive'
+# -1 2026-08-18 12:27:50        -1 Fazenda -----------------|
+# -1 2026-08-18 13:08:44        -1 Geórgia -----------------|
+# -1 2026-08-18 13:31:07        -1 Petições ----------------|
+# -1 2026-08-18 13:54:04        -1 Sítio -------------------|
+# -1 2026-08-31 17:29:57        -1 WalletOfSatoshi_Backup --|
+
 # ==============================================================================
 # Script de Sincronização Multinuvem (OneDrive -> Local | Google Drive -> Local)
 # Usando Rclone Sync com Mapeamento Específico de Pastas
