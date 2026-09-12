@@ -24,8 +24,9 @@
 # -1 2026-08-31 17:29:57        -1 WalletOfSatoshi_Backup --|
 
 # ==============================================================================
-# Script de Sincronização Multinuvem (OneDrive -> Local | Google Drive -> Local)
+# Script de Sincronização Multinuvem (OneDrive -> Local)
 # Usando Rclone Sync com Mapeamento Específico de Pastas
+# Nota: A sincronização do Google Drive via Rclone está comentada devido ao uso do OverGrive.
 # ==============================================================================
 
 set -euo pipefail
@@ -52,7 +53,7 @@ fi
 # ------------------------------------------------------------------------------
 # CONFIGURAÇÕES E VARIÁVEIS DE AMBIENTE
 # ------------------------------------------------------------------------------
-GDRIVE_REMOTE="Gdrive:"
+# GDRIVE_REMOTE="Gdrive:"  # [DESATIVADO - Gerenciado pelo OverGrive]
 ODRIVE_REMOTE="Odrive:"
 
 GDRIVE_LOCAL="/home/eduardo/Google Drive"
@@ -87,12 +88,12 @@ echo "==================================================" | tee -a "$LOG_FILE"
 echo "Iniciando sincronização geral: $(date '+%Y-%m-%d %H:%M:%S')" | tee -a "$LOG_FILE"
 
 STATUS_ODRIVE=0
-STATUS_GDRIVE=0
+STATUS_GDRIVE=0 # Mantido em 0 para não acionar falso alarme nos logs finais
 
 # ------------------------------------------------------------------------------
 # ETAPA 1: SINCRONIZAÇÃO DO ONEDRIVE (Odrive: -> Pastas Locais Especificadas)
 # ------------------------------------------------------------------------------
-echo -e "\n=== [FASE 1/2] Sincronizando OneDrive para as pastas locais ===" | tee -a "$LOG_FILE"
+echo -e "\n=== [FASE 1/1] Sincronizando OneDrive para as pastas locais ===" | tee -a "$LOG_FILE"
 notify-send "Sincronização OneDrive" "Iniciando sincronização do OneDrive às ${HORA_INICIO} h" \
     -i "$ICON_PATH" 2>/dev/null || true
 
@@ -131,36 +132,36 @@ else
 fi
 
 # ------------------------------------------------------------------------------
-# ETAPA 2: SINCRONIZAÇÃO DO GOOGLE DRIVE (Gdrive: -> /home/eduardo/Google Drive)
+# ETAPA 2: SINCRONIZAÇÃO DO GOOGLE DRIVE [COMENTADO / GERENCIADO PELO OVERGRIVE]
 # ------------------------------------------------------------------------------
-if [ $STATUS_ODRIVE -eq 0 ]; then
-    echo -e "\n=== [FASE 2/2] Sincronizando Google Drive para /home/eduardo/Google Drive ===" | tee -a "$LOG_FILE"
-    HORA_INICIO_GDRIVE=$(date '+%H:%M:%S')
-    notify-send "Sincronização Google Drive" "Iniciando sincronização do Google Drive às ${HORA_INICIO_GDRIVE} h" \
-        -i "$ICON_PATH" 2>/dev/null || true
-
-    # A trava --exclude protege a subpasta Documentos que veio do OneDrive
-    rclone sync "$GDRIVE_REMOTE" "$GDRIVE_LOCAL" \
-        --exclude "Drª. Zuely/Documentos/**" \
-        -P \
-        --update \
-        --transfers 4 \
-        --checkers 8 \
-        --stats 1s \
-        2>&1 | tee -a "$LOG_FILE" || STATUS_GDRIVE=1
-
-    HORA_FIM_GDRIVE=$(date '+%H:%M:%S')
-    if [ $STATUS_GDRIVE -eq 0 ]; then
-        notify-send "Sincronização Google Drive" "Google Drive concluído com sucesso às ${HORA_FIM_GDRIVE} h" \
-            -i "$ICON_PATH" 2>/dev/null || true
-    else
-        notify-send "Sincronização Google Drive" "Falha durante a sincronização do Google Drive." \
-            -i dialog-error 2>/dev/null || true
-    fi
-else
-    echo "Falha na etapa do OneDrive. Sincronização do Google Drive abortada." | tee -a "$LOG_FILE"
-    STATUS_GDRIVE=1
-fi
+# if [ $STATUS_ODRIVE -eq 0 ]; then
+#     echo -e "\n=== [FASE 2/2] Sincronizando Google Drive para /home/eduardo/Google Drive ===" | tee -a "$LOG_FILE"
+#     HORA_INICIO_GDRIVE=$(date '+%H:%M:%S')
+#     notify-send "Sincronização Google Drive" "Iniciando sincronização do Google Drive às ${HORA_INICIO_GDRIVE} h" \
+#         -i "$ICON_PATH" 2>/dev/null || true
+#
+#     # A trava --exclude protege a subpasta Documentos que veio do OneDrive
+#     rclone sync "$GDRIVE_REMOTE" "$GDRIVE_LOCAL" \
+#         --exclude "Drª. Zuely/Documentos/**" \
+#         -P \
+#         --update \
+#         --transfers 4 \
+#         --checkers 8 \
+#         --stats 1s \
+#         2>&1 | tee -a "$LOG_FILE" || STATUS_GDRIVE=1
+#
+#     HORA_FIM_GDRIVE=$(date '+%H:%M:%S')
+#     if [ $STATUS_GDRIVE -eq 0 ]; then
+#         notify-send "Sincronização Google Drive" "Google Drive concluído com sucesso às ${HORA_FIM_GDRIVE} h" \
+#             -i "$ICON_PATH" 2>/dev/null || true
+#     else
+#         notify-send "Sincronização Google Drive" "Falha durante a sincronização do Google Drive." \
+#             -i dialog-error 2>/dev/null || true
+#     fi
+# else
+#     echo "Falha na etapa do OneDrive. Sincronização do Google Drive abortada." | tee -a "$LOG_FILE"
+#     STATUS_GDRIVE=1
+# fi
 
 # ------------------------------------------------------------------------------
 # REGISTRO EM LOG
